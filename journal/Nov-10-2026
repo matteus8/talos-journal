@@ -1,0 +1,122 @@
+# Installation
+I'm following the quickstart guide on SIDERO's website and currently this is for Talos Linux, version 1.14. I'll worry about bare-metal install on Rasperbby pie 5 later - today, its just about getting this OS up and running to see it in action. 
+
+This guide walks us through starting a local Talos Linux cluster using Docker and talosctl in a few minutes. Because I'm on a MAC I will follow this install guide from Talos [website](https://docs.siderolabs.com/talos/v1.14/getting-started/quickstart), but based on the doc's it appears you could do this the documentation already seems a bit odd, because the first section says:
+
+> A short guide on setting up... Talos Linux cluster locally with Docker.
+
+And then continues with the pre-req's being:
+- talosctl: On macOS or Linux, install talosctl by running the command below. For other systems, see the "talosctl documentation":
+  - brew tap siderolabs/tap
+  - brew trust siderolabs/tap
+  - brew install siderolabs/tap/talosctl
+- kubectl
+
+And while kubectl is straight forward and I would expect us to know how to install this. The pre-req's, don't say nothing about docker install. But yes, assuming we are interested in talos, I'll make the assumtion we know how docker works, and forgive the poor doc's team at Talos... 
+
+Also, luckly for me I'm using MAC, so `brew` install, for the `talosctl`, will work, but, if your not on MAC.... 
+If I were Talos, instead of making us jump around for it, I personally would call out on this quickstart page, the `curl` command for other OS's should work too, as I found in this section on [this page](https://docs.siderolabs.com/talos/v1.14/getting-started/talosctl#alternative-install). Basically you can `curl` install `talosctl` for the following OS's (for both amd64 and arm64):
+- macOS
+- Linux
+- WSL on Windows
+> curl -sL https://talos.dev/install | sh
+
+I'll dig into what this script is, and what it does in the future for the security folks. I would recommend we do some homework, before we all willy nilly download stuff off the inter-webs :) .
+
+---
+Okay, now assuming we did everything right, what I have locally on my MAC, is this:
+- Docker Desktop (for ease of concept), with a future goal of the raspberry pi5.
+- Talsoctl, which I got from `brew` but could have likley used the `curl` script
+- Kubectl... if you dont know this, I recommend stopping here, and gettin' familier with this before moving forward.
+---
+Now to generate the cluster, the quickstart say's just this one command:
+`talosctl cluster create docker`
+On first glance, I though "docker" was the name of the cluster, but after checking the cli [docs](https://docs.siderolabs.com/talos/v1.14/reference/cli#talosctl-cluster-create-docker), the keyword "docker" is actually providing talosctl the argument for a `docker cluster`... I guess there is also a "create dev" and "create qemu", but I won't bother getting into that now... 
+To name the cluster, like i did, just pass the flag `--name`.
+> `talosctl cluster create docker --name devTalosCluster`
+I also noted the command `talosctl cluster destroy` if something went wrong durring creation.
+---
+Great, so the ouput actually looked like it did a few things:
+- generating PKI and tokens
+  - NOTE: I love to see this, so much work already done here, and if I'm right this is the TLS end to end encryption that is often a pain to setup with vinilla kubernets cli like `kubeadm`.
+- creating state directory in "~/.talos/clusters/devTalosCluster"
+  - NOTE: I made note of this directory "~/.talos" as I imagine this is were some juicy details might be regarding the cluster and its configuration.
+  - NOTE: I also found [this](https://docs.siderolabs.com/talos/v1.14/platform-specific-installations/local-platforms/docker#create-the-cluster) `talosctl config info`
+- downloading ghcr.io/siderolabs/talos:v1.14.5
+  - NOTE: pulling the image from github container registry (ghcr)
+- creating network devTalosCluster
+  - NOTE: I believe based on this [doc](https://docs.siderolabs.com/kubernetes-guides/cni/flannel), its the Flannel CNI for the network.
+- creating controlplane nodes
+  - NOTE: cool
+- creating worker nodes
+  - NOTE: cool
+- waiting for Talos API (to bootstrap the cluster)
+  - NOTE: I believe this is what makes TALOS, the so called "beauty queen"... but we shall see.
+- bootstrapping cluster
+  - NOTE: more security docs to follow, for what is actually going on here.
+---
+Seems to change gears on the install here
+---
+- waiting for etcd to be healthy: OK
+  - NOTE: okay
+- waiting for etcd members to be consistent across nodes: OK
+  - NOTE: okay
+- waiting for etcd members to be control plane nodes: OK
+  - NOTE: okay
+- waiting for apid to be ready: OK
+  - NOTE: this appears to be talos specific, as normal kuberentes would use `kube-apiserver`... this is the core gRPC-based management API daemon that runs on every Talos Linux node (listening by default on port 50000).
+- waiting for all nodes memory sizes: OK
+  - NOTE: I wonder if this is like dynamic based on the hardware?
+- waiting for all nodes disk sizes: OK
+  - NOTE: I will need to inspect the underlying network storage, but this will likley be done on the rp5 for a deeper more practical understanding, instead of viewing the docker abstraction here.
+- waiting for no diagnostics: OK
+  - NOTE: not sure what this means
+- waiting for kubelet to be healthy: OK
+  - NOTE: this is the agent on each node reporting back as healthy
+- waiting for all nodes to finish boot sequence: OK
+  - NOTE: ok
+- ◲ waiting for all k8s nodes to report: can't find expected node with IPs ["10.5.0.2"]
+  - NOTE: this just took a min. The "10.5.0.2" is the control plane...
+  - NOTE: the default cidr for [talos](https://docs.siderolabs.com/talos/v1.14/platform-specific-installations/local-platforms/docker#multiple-clusters) is `10.5.0.0/24`
+  - NOTE: of course we can configure this later (likley with yaml files)?
+- waiting for all nodes to finish boot sequence: OK
+- waiting for all k8s nodes to report: OK
+- waiting for all control plane static pods to be running: OK
+- waiting for all control plane components to be ready: OK
+- waiting for all k8s nodes to report ready: OK
+- waiting for kube-proxy to report ready: OK
+  - NOTE: We can edit this in the future if we dont want the default iptables and `kube-proxy`.
+  - NOTE: Read a lot more [here](https://docs.siderolabs.com/talos/v1.14/networking/configuration/overview)
+- waiting for coredns to report ready: OK
+  - NOTE: `coredns` is standard kubernetes, internal cluster DNS server
+- waiting for all k8s nodes to report schedulable: OK
+
+Now there is this output at the end of all that...
+
+```output
+merging kubeconfig into "~/.kube/config"
+PROVISIONER           docker
+NAME                  devTalosCluster
+NETWORK NAME          devTalosCluster
+NETWORK CIDR          10.5.0.0/24
+NETWORK GATEWAY       10.5.0.1
+NETWORK MTU           ...
+KUBERNETES ENDPOINT   https://127.0.0.1:52090
+
+NODES:
+
+NAME                              TYPE           IP         CPU    RAM      DISK
+/devTalosCluster-controlplane-1   controlplane   10.5.0.2   2.00   2.1 GB   -
+/devTalosCluster-worker-1         worker         10.5.0.3   2.00   2.1 GB   -
+```
+
+and of course, the quick test is:
+`kubectl get nodes -o wide`
+
+... and, if all went well, we are crusing into the next section with 1 controller node and one worker node. 
+I also ensured that my `kubectl` and `kube config` file were pointing to talos linux with these quick checks:
+- `vim ~/.kube/config`
+  - just check to ensure the talos linux cluster is there, as weather as gleam some other info about the cluster
+
+CHEERS!
+---
