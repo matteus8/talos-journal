@@ -21,7 +21,7 @@ If I were Talos, instead of making us jump around for it, I personally would cal
 - WSL on Windows
 > curl -sL https://talos.dev/install | sh
 
-I'll dig into what this script is, and what it does in the future for the security folks. I would recommend we do some homework, before we all willy nilly download stuff off the inter-webs :) .
+I'll dig into what this script is, and what it does in the future for the security folks. I would recommend we do some homework, before we all willy nilly download stuff off the inter-webs :) . Also for our future RasPi5, or pretend we are in air-gap/disconnected network, this wont work anyway... lots more on this subject in the future.
 
 ---
 Okay, now assuming we did everything right, what I have locally on my MAC, is this:
@@ -40,7 +40,9 @@ Great, so the ouput actually looked like it did a few things:
 - generating PKI and tokens
   - NOTE: I love to see this, so much work already done here, and if I'm right this is the TLS end to end encryption that is often a pain to setup with vinilla kubernets cli like `kubeadm`.
 - creating state directory in "~/.talos/clusters/devTalosCluster"
-  - NOTE: I made note of this directory "~/.talos" as I imagine this is were some juicy details might be regarding the cluster and its configuration.
+  - NOTE: I made note of this directory "~/.talos" and as I suspected - some juicy details for the cluster are in this directory. There are two dirs, both created by the talosctl:
+    - `~/.talos/clusters/devTalosCluster/state.yaml`: tracks containerIds, bridge network (10.5.0.0/24) and port mappings. Also tracks control plane node(s) and worker node(s). This helps `talosctl` know what to do with future commands for this specific cluster. When we move to RasPi5, this will likley be very different. 
+    - `~/.talos/config`: this is similar to how ~/.kube/config tells kubectl how to talk to the cluster. This tells talosctl how to talk with Talos Linux. This also does the port forwarding for the port 50000 (apid) - see below. Something else I noted, was the ED25519 PRIVATE KEY, which is not a SSH key, rather an mTLS cert for my local MAC, which is just better security for issuing OS commands to the cluster.
   - NOTE: I also found [this](https://docs.siderolabs.com/talos/v1.14/platform-specific-installations/local-platforms/docker#create-the-cluster) `talosctl config info`
 - downloading ghcr.io/siderolabs/talos:v1.14.5
   - NOTE: pulling the image from github container registry (ghcr)
@@ -64,7 +66,7 @@ Seems to change gears on the install here
 - waiting for etcd members to be control plane nodes: OK
   - NOTE: okay
 - waiting for apid to be ready: OK
-  - NOTE: this appears to be talos specific, as normal kuberentes would use `kube-apiserver`... this is the core gRPC-based management API daemon that runs on every Talos Linux node (listening by default on port 50000).
+  - NOTE: this appears to be talos specific, as normal kuberentes would use `kube-apiserver` on port 6443... this is the core gRPC-based management API daemon that runs on all Talos Linux nodes. So, while in standard linux (like Red Hat or Rocky), we `ssh` into the server and run some debug commands, Talos has no shell. Therefore the only way to check is with `talosctl` which talks to the `apid` on port 50000. 
 - waiting for all nodes memory sizes: OK
   - NOTE: I wonder if this is like dynamic based on the hardware?
 - waiting for all nodes disk sizes: OK
