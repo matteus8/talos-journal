@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **Archival Note / Why this is deprecated for our Edge Lab:**
-> This configuration demonstrates how Sidero Labs' official Terraform provider (`siderolabs/talos`) can be used to generate PKI and inject machine configs. While this pattern is excellent for cloud environments (AWS/Azure) or hypervisors (Proxmox/vSphere) where Terraform provisions the underlying virtual machines, **we decided against using it for our physical bare-metal edge lab in favor of a Git repo + native `talosctl`**.
+> This configuration demonstrates how Sidero Labs' official Terraform provider (`siderolabs/talos`) can be used to generate PKI and inject machine configs. While this pattern is excellent for cloud environments (AWS/Azure) or hypervisors (Proxmox/vSphere) where Terraform provisions the underlying virtual machines, we decided against using it for our physical bare-metal edge lab in favor of a Git repo and native `talosctl`s.
 >
 > **The Reason:** On physical bare metal, Terraform cannot create or destroy physical hardware. Wrapping physical boards in a `terraform.tfstate` file introduces unnecessary state-locking, drift, and network dependency issues on an intermittently connected edge. Treating our Git repository as the source of truth and using native `talosctl` commands (`talosctl apply-config`, `talosctl patch mc`, `talosctl upgrade`) gives us pure, stateless GitOps without the state file baggage.
 
