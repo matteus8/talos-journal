@@ -9,9 +9,9 @@ stages:
 deploy_pi5_node:
   stage: deploy-edge
   image:
-    name: alpine:latest
+    name: alpine:latest # likley tagged
   variables:
-    PI5_IP: "192.168.1.101"
+    PI5_IP: "192.168.1.101" # or some matrix or Gitlab Variable
   before_script:
     - apk add --no-cache curl
     # 1. Install SOPS
@@ -35,7 +35,7 @@ deploy_pi5_node:
     - if: '$CI_COMMIT_BRANCH == "main"'
 ```
 
-> **Why this beats Terraform in CI/CD on bare metal:**
-> - Zero `terraform.tfstate` locking or remote backend dependencies (no S3/MinIO required).
-> - Uses native Talos mTLS on port 50000.
-> - The runner container is ephemeral; once the job finishes, the decrypted config is completely wiped.
+Why this beats Terraform in CI/CD on bare metal:
+- Zero `terraform.tfstate` locking or remote backend dependencies (no S3/MinIO/RustFS required).
+- Uses native Talos mTLS on port 50000
+- The runner container is ephemeral; once the job finishes, the decrypted config is completely wiped
