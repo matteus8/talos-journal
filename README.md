@@ -5,10 +5,10 @@ This repo is designed to explore Talos Linux, Talos AI, and Kafka...
 ## Goals
 Explore specific aspects for using Talos Linux in Air Gap and DDIL environments. This exploration will include but is not limited to:
 - using Raspberry Pi 5
-- using talos linux AI
-  - using free open source models
-- load testing with kafka node cluster
+- load testing with kafka node cluster (immediate priority - streaming data on bare-metal Talos)
   - using external free API's for ingest traffic
+- using talos linux AI (future project - homelab lacks GPU compute; will explore renting an AWS GPU instance or buying hardware in a later phase)
+  - using free open source models
 - hybrid cloud (future goals)
 ## Outcomes
 Journal files with date time and what was done for each session.
