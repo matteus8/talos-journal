@@ -137,12 +137,27 @@ log_ok "Configuration is valid for metal mode!"
 # 5. Fetch / Cache Base Talos Image
 # ------------------------------------------------------------------------------
 CACHED_IMAGE="$CACHE_DIR/$IMAGE_NAME"
+# Pre-decompressed raw image for max write speed (avoids pipe bottlenecks)
+RAW_IMAGE="$CACHE_DIR/${NODE_TYPE}.raw"
+
 if [[ ! -f "$CACHED_IMAGE" ]]; then
   log_info "Downloading Talos $TALOS_VERSION $TARGET_ARCH base image..."
   curl -L --progress-bar -o "$CACHED_IMAGE" "$IMAGE_URL"
   log_ok "Image cached at $CACHED_IMAGE"
 else
   log_ok "Using cached base image: $CACHED_IMAGE"
+fi
+
+if [[ ! -f "$RAW_IMAGE" ]]; then
+  log_info "Decompressing image to SSD cache ($RAW_IMAGE) for maximum write speed..."
+  if [[ "$CACHED_IMAGE" == *.zst ]]; then
+    zstd -d -f "$CACHED_IMAGE" -o "$RAW_IMAGE"
+  else
+    xz -dc "$CACHED_IMAGE" > "$RAW_IMAGE"
+  fi
+  log_ok "Decompressed SSD image ready: $RAW_IMAGE"
+else
+  log_ok "Using pre-decompressed SSD image: $RAW_IMAGE"
 fi
 
 # ------------------------------------------------------------------------------
@@ -167,12 +182,8 @@ fi
 log_info "Unmounting $TARGET_DISK..."
 diskutil unmountDisk "$TARGET_DISK"
 
-log_info "Streaming decompressing image to $RAW_DISK via dd (enter macOS sudo password if prompted)..."
-if [[ "$CACHED_IMAGE" == *.zst ]]; then
-  zstd -dc "$CACHED_IMAGE" | sudo dd of="$RAW_DISK" bs=4M status=progress
-else
-  xz -dc "$CACHED_IMAGE" | sudo dd of="$RAW_DISK" bs=4M status=progress
-fi
+log_info "Streaming from SSD cache directly to $RAW_DISK via dd (caffeinated)..."
+caffeinate -i sudo dd if="$RAW_IMAGE" of="$RAW_DISK" bs=4m status=progress
 sync
 
 log_ok "Raw image successfully written to $RAW_DISK!"
