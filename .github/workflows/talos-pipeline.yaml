@@ -1,0 +1,87 @@
+name: Talos Edge Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate-configs:
+    name: Validate Encrypted Configs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Security Gate - Ensure No Plaintext Secrets
+        run: |
+          echo "Scanning repository for accidental unencrypted secrets..."
+          LEAKED=$(git ls-files | grep -E '(^secrets\.yaml$|^controlplane\.yaml$|^worker\.yaml$|^talosconfig$|\.key$)' || true)
+          if [ -n "$LEAKED" ]; then
+            echo "::error::Found unencrypted secrets committed to git: $LEAKED"
+            exit 1
+          fi
+          echo "✓ Clean: No plaintext secrets committed."
+
+      - name: Install SOPS
+        run: |
+          SOPS_VER="v3.9.4"
+          curl -LO "https://github.com/getsops/sops/releases/download/${SOPS_VER}/sops-${SOPS_VER}.linux.amd64"
+          sudo mv "sops-${SOPS_VER}.linux.amd64" /usr/local/bin/sops
+          sudo chmod +x /usr/local/bin/sops
+
+      - name: Install talosctl
+        run: |
+          curl -sL https://talos.dev/install | sh
+
+      - name: Decrypt & Validate Talos Machine Configs
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          if [ -z "$SOPS_AGE_KEY" ]; then
+            echo "::warning::SOPS_AGE_KEY secret not set in GitHub repository settings. Skipping in-memory decryption."
+            exit 0
+          fi
+
+          echo "Decrypting and validating Pi 5 control plane config..."
+          sops -d configs/controlplane.enc.yaml | talosctl validate --mode metal -c /dev/stdin
+
+          echo "Decrypting and validating Surface 3 worker config..."
+          sops -d configs/worker.enc.yaml | talosctl validate --mode metal -c /dev/stdin
+          echo "✓ All machine configs decrypted in-memory and passed metal validation."
+
+  package-edge-images:
+    name: Package Edge Base Images
+    runs-on: ubuntu-latest
+    needs: validate-configs
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Talos Base Images for Hardware
+        run: |
+          TALOS_VERSION="v1.14.5"
+          mkdir -p artifacts
+
+          echo "Downloading Surface 3 (x86_64) installer image..."
+          curl -LO "https://github.com/siderolabs/talos/releases/download/${TALOS_VERSION}/metal-amd64.raw.zst"
+          mv metal-amd64.raw.zst artifacts/surface3-metal-amd64.raw.zst
+
+          echo "Downloading Raspberry Pi 5 (ARM64) Image Factory SBC image..."
+          # Pi 5 requires Image Factory schematic with siderolabs/sbc-raspberrypi
+          curl -LO "https://factory.talos.dev/image/ee21ef4a5ef808a9b7484cc0dda0f25075021691c8c09a276591eedb638ea1f9/${TALOS_VERSION}/metal-arm64.raw.xz"
+          mv metal-arm64.raw.xz artifacts/pi5-sbc-arm64.raw.xz
+
+          echo "Artifacts ready:"
+          ls -lh artifacts/
+
+      - name: Upload Bootable Images as GitHub Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: talos-edge-boot-images
+          path: artifacts/
+          retention-days: 7

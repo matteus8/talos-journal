@@ -1,0 +1,6 @@
+creation_rules:
+  - path_regex: configs/.*\.enc\.ya?ml$
+    encrypted_regex: '^(token|crt|cert|key|privateKey|secret|clusterSecret|clusterID|ca|acceptedCAs|aescbcEncryptionSecret)$'
+    age: age18n9gvsd9xzwjfj7c28tqdxrn6kw9yjvj858n4vz6szvuswdvjews68mc8q
+  - path_regex: configs/talosconfig\.enc$
+    age: age18n9gvsd9xzwjfj7c28tqdxrn6kw9yjvj858n4vz6szvuswdvjews68mc8q
