@@ -134,30 +134,52 @@ echo "$DECRYPTED_CONFIG" | talosctl validate --mode metal -c /dev/stdin
 log_ok "Configuration is valid for metal mode!"
 
 # ------------------------------------------------------------------------------
-# 5. Fetch / Cache Base Talos Image
+# 5. Fetch / Build Talos Image
 # ------------------------------------------------------------------------------
-CACHED_IMAGE="$CACHE_DIR/$IMAGE_NAME"
-# Pre-decompressed raw image for max write speed (avoids pipe bottlenecks)
-RAW_IMAGE="$CACHE_DIR/${NODE_TYPE}.raw"
-
-if [[ ! -f "$CACHED_IMAGE" ]]; then
-  log_info "Downloading Talos $TALOS_VERSION $TARGET_ARCH base image..."
-  curl -L --progress-bar -o "$CACHED_IMAGE" "$IMAGE_URL"
-  log_ok "Image cached at $CACHED_IMAGE"
-else
-  log_ok "Using cached base image: $CACHED_IMAGE"
-fi
-
-if [[ ! -f "$RAW_IMAGE" ]]; then
-  log_info "Decompressing image to SSD cache ($RAW_IMAGE) for maximum write speed..."
-  if [[ "$CACHED_IMAGE" == *.zst ]]; then
-    zstd -d -f "$CACHED_IMAGE" -o "$RAW_IMAGE"
+if [[ "$NODE_TYPE" == "pi5" ]]; then
+  RAW_IMAGE="$CACHE_DIR/pi5-prebaked.raw"
+  if [[ ! -f "$RAW_IMAGE" ]]; then
+    log_info "Building DoD-standard pre-baked Pi 5 image with local imager container..."
+    TMP_CONFIG=$(mktemp)
+    echo "$DECRYPTED_CONFIG" > "$TMP_CONFIG"
+    docker run --rm \
+      -v "$TMP_CONFIG:/workspace/controlplane.yaml" \
+      -v "$(pwd)/$CACHE_DIR:/out" \
+      ghcr.io/siderolabs/imager:${TALOS_VERSION} rpi_generic \
+      --arch arm64 \
+      --overlay-image ghcr.io/siderolabs/sbc-raspberrypi:v0.1.0 \
+      --overlay-name rpi_generic \
+      --embedded-config-path /workspace/controlplane.yaml
+    rm -f "$TMP_CONFIG"
+    xz -dc "$CACHE_DIR/metal-arm64.raw.xz" > "$RAW_IMAGE"
+    rm -f "$CACHE_DIR/metal-arm64.raw.xz"
+    log_ok "Pre-baked Pi 5 SSD image ready: $RAW_IMAGE"
   else
-    xz -dc "$CACHED_IMAGE" > "$RAW_IMAGE"
+    log_ok "Using pre-baked Pi 5 image: $RAW_IMAGE"
   fi
-  log_ok "Decompressed SSD image ready: $RAW_IMAGE"
 else
-  log_ok "Using pre-decompressed SSD image: $RAW_IMAGE"
+  CACHED_IMAGE="$CACHE_DIR/$IMAGE_NAME"
+  RAW_IMAGE="$CACHE_DIR/${NODE_TYPE}.raw"
+
+  if [[ ! -f "$CACHED_IMAGE" ]]; then
+    log_info "Downloading Talos $TALOS_VERSION $TARGET_ARCH base image..."
+    curl -L --progress-bar -o "$CACHED_IMAGE" "$IMAGE_URL"
+    log_ok "Image cached at $CACHED_IMAGE"
+  else
+    log_ok "Using cached base image: $CACHED_IMAGE"
+  fi
+
+  if [[ ! -f "$RAW_IMAGE" ]]; then
+    log_info "Decompressing image to SSD cache ($RAW_IMAGE) for maximum write speed..."
+    if [[ "$CACHED_IMAGE" == *.zst ]]; then
+      zstd -d -f "$CACHED_IMAGE" -o "$RAW_IMAGE"
+    else
+      xz -dc "$CACHED_IMAGE" > "$RAW_IMAGE"
+    fi
+    log_ok "Decompressed SSD image ready: $RAW_IMAGE"
+  else
+    log_ok "Using pre-decompressed SSD image: $RAW_IMAGE"
+  fi
 fi
 
 # ------------------------------------------------------------------------------
@@ -192,10 +214,10 @@ log_ok "Raw image successfully written to $RAW_DISK!"
 # 8. Post-Flash Guidance
 # ------------------------------------------------------------------------------
 if [[ "$NODE_TYPE" == "pi5" ]]; then
-  log_info "Pi 5 MicroSD is flashed with the Raspberry Pi SBC bootloader!"
-  log_info "Booting into Maintenance Mode: insert the card into Pi 5 and power on."
-  log_info "Apply your decrypted config with:"
-  echo -e "  ${GREEN}sops -d configs/controlplane.enc.yaml | talosctl apply-config --insecure -n 192.168.1.100 --file /dev/stdin${NC}"
+  log_info "Pi 5 MicroSD is flashed with pre-baked configuration!"
+  log_info "Node will boot directly to $TARGET_IP with static IP and cluster CA active (Zero --insecure needed)."
+  log_info "Once powered on and connected via Ethernet, bootstrap the cluster with:"
+  echo -e "  ${GREEN}talosctl bootstrap -n $TARGET_IP --talosconfig configs/talosconfig${NC}"
 else
   log_info "Surface 3 USB installer is flashed!"
   log_info "Insert into Surface 3, hold Volume Down, press Power to boot from USB."
