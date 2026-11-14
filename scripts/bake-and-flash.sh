@@ -145,10 +145,11 @@ if [[ "$NODE_TYPE" == "pi5" ]]; then
     docker run --rm \
       -v "$TMP_CONFIG:/workspace/controlplane.yaml" \
       -v "$(pwd)/$CACHE_DIR:/out" \
-      ghcr.io/siderolabs/imager:${TALOS_VERSION} rpi_generic \
+      ghcr.io/siderolabs/imager:${TALOS_VERSION} rpi_5 \
       --arch arm64 \
-      --overlay-image ghcr.io/siderolabs/sbc-raspberrypi:v0.1.0 \
-      --overlay-name rpi_generic \
+      --overlay-image ghcr.io/siderolabs/sbc-raspberrypi:v0.3.0 \
+      --overlay-name rpi_5 \
+      --extra-kernel-arg "ip=192.168.1.100::192.168.1.1:255.255.255.0::end0:off:1.1.1.1" \
       --embedded-config-path /workspace/controlplane.yaml
     rm -f "$TMP_CONFIG"
     xz -dc "$CACHE_DIR/metal-arm64.raw.xz" > "$RAW_IMAGE"
